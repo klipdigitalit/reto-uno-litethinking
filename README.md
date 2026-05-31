@@ -1,105 +1,332 @@
-# Día 4: Arquitectura de Eventos y Automatización QA
+# Reto Técnico QA Automation – Transferencias Asíncronas con Kafka y Playwright
 
-Este dia usa una app de clase (simple) para practicar un flujo asincrono end-to-end.
+## Descripción
 
-Este ejercicio incluye:
-- Backend Node.js (Express + KafkaJS) en `backend/`
-- Frontend React + Vite + TypeScript
-- Pruebas E2E con Playwright
-- Orquestación con Docker Compose (Kafka y Kafka-UI)
+Este proyecto implementa una solución de automatización QA para validar un flujo de procesamiento asíncrono utilizando una arquitectura basada en eventos.
 
-## Pasos básicos
+La aplicación simula el envío de transferencias bancarias donde la solicitud es procesada de forma asíncrona mediante Apache Kafka. El estado de la transacción evoluciona desde **PENDIENTE** hasta **APROBADO**, permitiendo validar estrategias de sincronización y polling inteligente desde pruebas automatizadas.
 
-1. Levanta Kafka:
-   ```bash
-   docker-compose up -d
-   ```
-   El topic `transferencias-creadas` se crea automaticamente al iniciar los contenedores.
-   Kafka UI se conecta por red interna (`kafka:29092`) y la app local por host (`localhost:9092`).
-2. Instala dependencias backend y frontend:
-   ```bash
-   cd backend && npm install && cd ..
-   cd frontend && npm install && cd ..
-   cd tests && npm install && npx playwright install --with-deps && cd ..
-   ```
-3. Arranca backend y worker:
-   ```bash
-   cd backend
-   npm run start-server
-   # En otra terminal:
-   npm run start-worker
-   ```
-4. Arranca el frontend:
-   ```bash
-   cd frontend
-   npm run dev
-   ```
-5. Corre las pruebas E2E:
-   ```bash
-   cd tests
-   npx playwright test --headed
-   ```
+---
 
-## Objetivo de aprendizaje
+# Objetivos del reto
 
-- Ver el cambio de estado `PENDIENTE -> APROBADO` despues del procesamiento asincrono.
-- Entender por que en E2E se debe esperar/pollear estado y no asumir respuesta inmediata.
+* Implementar una arquitectura basada en eventos utilizando Kafka.
+* Desarrollar pruebas E2E utilizando Playwright.
+* Aplicar el patrón de diseño Page Object Model (POM).
+* Implementar Polling Inteligente para validaciones asíncronas.
+* Orquestar la ejecución mediante GitHub Actions.
+* Reducir escenarios de flakiness en pruebas E2E.
 
-## Prueba manual en PowerShell (muy clara)
+---
 
-Ejecuta los comandos desde PowerShell para validar el flujo.
-
-### 1) Crear transferencia
-
-```powershell
-Invoke-RestMethod -Uri "http://localhost:3000/api/transfer" -Method Post -ContentType "application/json" -Body '{"target":"98765","amount":150}'
-```
-
-Respuesta esperada (ejemplo):
+# Arquitectura de la solución
 
 ```text
-id               status
---               ------
-TX-1779309030082 PENDIENTE
+Frontend React
+      │
+      ▼
+Backend API (Express)
+      │
+      ▼
+Kafka Topic
+transferencias-creadas
+      │
+      ▼
+Worker Kafka
+      │
+      ▼
+Actualización Estado
+(PENDIENTE → APROBADO)
+      │
+      ▼
+Frontend consulta estado
+(Polling)
+      │
+      ▼
+Playwright valida resultado
 ```
 
-### 2) Error comun: usar un ID placeholder
+---
 
-Si consultas con `TX-XXXXXXXXXXXX`, el sistema responde `NO_ENCONTRADO` porque ese ID no existe.
+# Tecnologías utilizadas
 
-```powershell
-Invoke-RestMethod -Uri "http://localhost:3000/api/status/TX-XXXXXXXXXXXX"
-```
+## Frontend
 
-Respuesta esperada:
+* React
+* Vite
+* TypeScript
+
+## Backend
+
+* Node.js
+* Express
+
+## Mensajería
+
+* Apache Kafka
+* KafkaJS
+
+## Automatización
+
+* Playwright
+* Page Object Model (POM)
+
+## DevOps
+
+* Docker Compose
+* GitHub Actions
+
+---
+
+# Estructura del proyecto
 
 ```text
-id              status
---              ------
-TX-XXXXXXXXXXXX NO_ENCONTRADO
+reto-uno-litethinking
+│
+├── .github/
+│   └── workflows/
+│       └── test-pipeline.yml
+│
+├── backend/
+│   ├── server.js
+│   ├── worker.js
+│   ├── package.json
+│   └── ...
+│
+├── frontend/
+│   ├── src/
+│   ├── public/
+│   ├── package.json
+│   └── ...
+│
+├── tests/
+│   ├── pages/
+│   │   └── TransferPage.js
+│   │
+│   └── transfer-async.spec.js
+│
+├── docker-compose.yml
+├── package.json
+├── playwright.config.ts
+└── README.md
 ```
 
-### 3) Consulta correcta con el ID real
 
-Usa el `id` real devuelto en el paso 1.
+# Flujo funcional
 
-```powershell
-Invoke-RestMethod -Uri "http://localhost:3000/api/status/TX-1779309030082"
-```
+## 1. Crear transferencia
 
-Respuesta esperada (despues del procesamiento asincrono):
+El usuario registra:
+
+* Cuenta destino
+* Valor de transferencia
+
+La aplicación crea una transacción con estado:
 
 ```text
-id               status
---               ------
-TX-1779309030082 APROBADO
+PENDIENTE
 ```
 
-Nota: con la configuracion actual el worker tarda aproximadamente 10 segundos en pasar de `PENDIENTE` a `APROBADO`.
+---
 
-## Estructura recomendada
+## 2. Publicar evento Kafka
 
-- `backend/`: solo API y worker Kafka.
-- `frontend/`: unica UI (React + Vite).
-- `tests/`: test plans y test cases automatizados.
-- `app/`: compatibilidad temporal para comandos antiguos (`npm run start-server` y `npm run start-worker`).
+El backend publica un evento en el tópico:
+
+```text
+transferencias-creadas
+```
+
+---
+
+## 3. Procesamiento asíncrono
+
+El Worker consume el evento desde Kafka y simula el procesamiento bancario.
+
+Posteriormente actualiza el estado a:
+
+```text
+APROBADO
+```
+
+---
+
+## 4. Consulta de estado
+
+El frontend ejecuta consultas periódicas al backend para conocer el estado actualizado.
+
+---
+
+## 5. Validación automatizada
+
+Playwright implementa Polling Inteligente para esperar dinámicamente hasta que el estado cambie a:
+
+```text
+Estado: APROBADO
+```
+
+sin utilizar esperas fijas (sleep).
+
+---
+
+# Instalación local
+
+## 1. Levantar Kafka
+
+```bash
+docker compose up -d
+```
+
+---
+
+## 2. Instalar dependencias Backend
+
+```bash
+cd backend
+npm install
+```
+
+---
+
+## 3. Instalar dependencias Frontend
+
+```bash
+cd frontend
+npm install
+```
+
+---
+
+## 4. Instalar dependencias raíz
+
+```bash
+npm install
+```
+
+---
+
+## 5. Instalar Playwright
+
+```bash
+npx playwright install --with-deps
+```
+
+---
+
+# Ejecución local
+
+## Backend
+
+```bash
+cd backend
+npm run start-server
+```
+
+---
+
+## Worker Kafka
+
+```bash
+cd backend
+npm run start-worker
+```
+
+---
+
+## Frontend
+
+```bash
+cd frontend
+npm run dev
+```
+
+Aplicación disponible en:
+
+```text
+http://localhost:5173
+```
+
+---
+
+# Ejecución de pruebas
+
+## Ejecución simple
+
+```bash
+npx playwright test
+```
+
+---
+
+## Ejecución del reto
+
+```bash
+npx playwright test tests/transfer-async.spec.js --workers=1 --repeat-each=3
+```
+
+---
+
+# Estrategia de Polling Inteligente
+
+La validación del estado utiliza:
+
+```javascript
+expect.poll()
+```
+
+permitiendo:
+
+* Espera dinámica.
+* Timeout configurable.
+* Eliminación de sleeps fijos.
+* Reducción de flakiness.
+
+Timeout configurado:
+
+```text
+10 segundos
+```
+
+---
+
+# Integración Continua
+
+El proyecto cuenta con un pipeline CI/CD implementado mediante GitHub Actions.
+
+El pipeline realiza:
+
+1. Checkout del repositorio.
+2. Instalación de dependencias.
+3. Instalación de navegadores Playwright.
+4. Levantamiento de Kafka.
+5. Levantamiento Backend.
+6. Levantamiento Worker.
+7. Levantamiento Frontend.
+8. Ejecución de pruebas E2E.
+9. Publicación de evidencias.
+
+---
+
+# Repositorio
+
+https://github.com/klipdigitalit/reto-uno-litethinking
+
+# Evidencias del reto
+
+Para facilitar la revisión del ejercicio, se incluye el documento:
+
+```text
+Evidencias_del_reto.pdf
+```
+
+Este documento contiene:
+
+* Evidencias de la Fase 1 – Preparación del entorno local.
+* Evidencias de la Fase 2 – Automatización resiliente con Playwright.
+* Evidencias de la Fase 3 – Orquestación CI/CD con GitHub Actions.
+* Capturas de pantalla de Kafka UI.
+* Evidencias de ejecución de pruebas.
+* Capturas del pipeline en GitHub Actions.
+* Hallazgos y soluciones aplicadas durante la implementación.
+
+Se recomienda revisar este documento junto con el código fuente para comprender el proceso completo de construcción y validación de la solución.
