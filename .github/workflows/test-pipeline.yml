@@ -65,7 +65,7 @@ jobs:
           echo "Servicios listos"
 
       - name: Ejecutar pruebas Playwright
-        run: npx playwright test tests/transfer-async.spec.js --workers=1
+        run: npx playwright test tests/transfer-async.spec.js --headed --workers=1 --repeat-each=3
 
       - name: Guardar reporte HTML si falla
         if: failure()
