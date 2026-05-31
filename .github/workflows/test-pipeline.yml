@@ -10,57 +10,45 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Descargar código
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Configurar Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Instalar dependencias raíz
         run: npm install
 
-      - name: Instalar browsers Playwright
+      - name: Instalar Playwright
         run: npx playwright install --with-deps
 
-      - name: Levantar Kafka con Docker Compose
+      - name: Levantar Kafka
         run: docker compose up -d
 
-      - name: Instalar dependencias backend
-        run: |
-          cd backend
-          npm install
+      - name: Instalar backend
+        run: npm install
+        working-directory: backend
 
       - name: Levantar backend server
-        run: |
-          cd backend
-          nohup npm run start-server > ../server.log 2>&1 &
+        run: nohup npm run start-server > ../server.log 2>&1 &
+        working-directory: backend
 
-      - name: Levantar backend worker
-        run: |
-          cd backend
-          nohup npm run start-worker > ../worker.log 2>&1 &
+      - name: Levantar worker
+        run: nohup npm run start-worker > ../worker.log 2>&1 &
+        working-directory: backend
 
-      - name: Instalar dependencias frontend
-        run: |
-          cd frontend
-          npm install
+      - name: Instalar frontend
+        run: npm install
+        working-directory: frontend
 
       - name: Levantar frontend
-        run: |
-          cd frontend
-          nohup npm run dev -- --host 0.0.0.0 > ../frontend.log 2>&1 &
+        run: nohup npm run dev -- --host 0.0.0.0 > ../frontend.log 2>&1 &
+        working-directory: frontend
 
       - name: Esperar servicios
-        run: |
-          sleep 20
-          docker ps
-          cat server.log || true
-          cat worker.log || true
-          cat frontend.log || true
+        run: sleep 25
 
-      - name: Ejecutar pruebas Playwright headless
+      - name: Ejecutar pruebas Playwright
         run: npx playwright test tests/transfer-async.spec.js --workers=1 --repeat-each=3
 
       - name: Guardar reporte HTML si falla
@@ -69,13 +57,3 @@ jobs:
         with:
           name: playwright-report
           path: playwright-report/
-
-      - name: Guardar logs si falla
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: execution-logs
-          path: |
-            server.log
-            worker.log
-            frontend.log
