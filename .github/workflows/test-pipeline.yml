@@ -20,7 +20,9 @@ jobs:
         run: npm install
 
       - name: Instalar Playwright Browsers
-        run: npx --yes playwright install --with-deps
+        run: |
+          chmod +x node_modules/.bin/playwright
+          ./node_modules/.bin/playwright install --with-deps
 
       - name: Levantar Kafka
         run: docker compose up -d
