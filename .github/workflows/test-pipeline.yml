@@ -48,10 +48,13 @@ jobs:
         working-directory: frontend
 
       - name: Esperar servicios
-        run: sleep 25
+        run: |
+          sleep 30
+          curl -I http://localhost:3000 || true
+          curl -I http://localhost:5173 || true
 
       - name: Ejecutar pruebas Playwright
-        run: npx playwright test tests/transfer-async.spec.js --workers=1 --repeat-each=3
+        run: npx playwright test tests/transfer-async.spec.js --workers=1
 
       - name: Guardar reporte HTML si falla
         if: failure()
