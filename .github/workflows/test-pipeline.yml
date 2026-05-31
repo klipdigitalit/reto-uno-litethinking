@@ -19,8 +19,8 @@ jobs:
       - name: Instalar dependencias raíz
         run: npm install
 
-      - name: Instalar Playwright
-        run: npx playwright install --with-deps
+      - name: Instalar Playwright Browsers
+        run: npx --yes playwright install --with-deps
 
       - name: Levantar Kafka
         run: docker compose up -d
